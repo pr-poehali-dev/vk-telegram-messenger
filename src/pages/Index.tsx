@@ -6,8 +6,10 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import Icon from '@/components/ui/icon';
+import { useAuth } from '@/contexts/AuthContext';
 
 const Index = () => {
+  const { userProfile, signOut } = useAuth();
   const [activeSection, setActiveSection] = useState('chats');
   const [selectedChat, setSelectedChat] = useState(null);
   const [message, setMessage] = useState('');
@@ -55,10 +57,35 @@ const Index = () => {
           <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
             Messenger
           </h1>
-          <Button variant="ghost" size="sm" className="hover:bg-primary/10">
-            <Icon name="Search" size={20} />
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="ghost" size="sm" className="hover:bg-primary/10">
+              <Icon name="Search" size={20} />
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="hover:bg-red-100 hover:text-red-600" 
+              onClick={signOut}
+            >
+              <Icon name="LogOut" size={20} />
+            </Button>
+          </div>
         </div>
+        
+        {userProfile && (
+          <div className="flex items-center gap-3 mb-4 p-2 bg-white/50 rounded-lg">
+            <div className="w-10 h-10 bg-gradient-to-r from-primary/20 to-secondary/20 rounded-full flex items-center justify-center">
+              👤
+            </div>
+            <div className="flex-1">
+              <h3 className="font-semibold text-sm">@{userProfile.username}</h3>
+              <p className="text-xs text-slate-500">{userProfile.phone}</p>
+            </div>
+            <Badge variant="secondary" className="text-xs">
+              {userProfile.theme === 'dark' ? '🌙' : '☀️'}
+            </Badge>
+          </div>
+        )}
         
         {/* Stories */}
         <div className="flex gap-3 overflow-x-auto pb-2">
