@@ -1,21 +1,31 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import Icon from '@/components/ui/icon';
 import { useAuth } from '@/contexts/AuthContext';
+import CountrySelect from '@/components/ui/country-select';
+import { countries, Country, validatePhoneNumber, formatPhoneNumber } from '@/data/countries';
 
 const Auth = () => {
   const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [selectedCountry, setSelectedCountry] = useState<Country>(countries[0]);
   const [formData, setFormData] = useState({
     phone: '',
     username: '',
     password: '',
     confirmPassword: ''
   });
+
+  useEffect(() => {
+    const savedUsername = localStorage.getItem('lastUsername');
+    if (savedUsername && !isSignUp) {
+      setFormData(prev => ({ ...prev, username: savedUsername }));
+    }
+  }, [isSignUp]);
 
   const { signUp, signIn } = useAuth();
 
@@ -54,9 +64,17 @@ const Auth = () => {
           return;
         }
 
-        const { error } = await signUp(formData.phone, formData.username, formData.password);
+        if (!validatePhoneNumber(formData.phone, selectedCountry)) {
+          setError(`Неверный формат номера для ${selectedCountry.name}`);
+          return;
+        }
+
+        const fullPhone = selectedCountry.dialCode + formData.phone.replace(/\D/g, '');
+        const { error } = await signUp(fullPhone, formData.username, formData.password);
         if (error) {
           setError(error);
+        } else {
+          localStorage.setItem('lastUsername', formData.username);
         }
       } else {
         if (!formData.username.trim()) {
@@ -72,6 +90,8 @@ const Auth = () => {
         const { error } = await signIn(formData.username, formData.password);
         if (error) {
           setError(error);
+        } else {
+          localStorage.setItem('lastUsername', formData.username);
         }
       }
     } finally {
@@ -79,22 +99,11 @@ const Auth = () => {
     }
   };
 
-  const formatPhoneNumber = (value: string) => {
-    const phoneNumber = value.replace(/[^\d]/g, '');
-    const phoneNumberLength = phoneNumber.length;
-
-    if (phoneNumberLength < 4) return phoneNumber;
-    if (phoneNumberLength < 7) {
-      return `${phoneNumber.slice(0, 3)} ${phoneNumber.slice(3)}`;
-    }
-    return `${phoneNumber.slice(0, 3)} ${phoneNumber.slice(3, 6)} ${phoneNumber.slice(6, 10)}`;
-  };
-
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const formattedNumber = formatPhoneNumber(e.target.value);
+    const formatted = formatPhoneNumber(e.target.value, selectedCountry);
     setFormData(prev => ({
       ...prev,
-      phone: formattedNumber
+      phone: formatted
     }));
     setError('');
   };
@@ -121,20 +130,31 @@ const Auth = () => {
             {isSignUp && (
               <div className="space-y-2">
                 <Label htmlFor="phone">Номер телефона</Label>
-                <div className="relative">
-                  <Icon name="Phone" size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
-                  <Input
-                    id="phone"
-                    name="phone"
-                    type="tel"
-                    placeholder="+7 999 999 9999"
-                    value={formData.phone}
-                    onChange={handlePhoneChange}
-                    className="pl-10"
-                    maxLength={15}
-                    required={isSignUp}
+                <div className="flex gap-2">
+                  <CountrySelect
+                    value={selectedCountry}
+                    onChange={setSelectedCountry}
+                    countries={countries}
                   />
+                  <div className="relative flex-1">
+                    <Icon name="Phone" size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
+                    <Input
+                      id="phone"
+                      name="phone"
+                      type="tel"
+                      placeholder="999 999 9999"
+                      value={formData.phone}
+                      onChange={handlePhoneChange}
+                      className="pl-10"
+                      required={isSignUp}
+                    />
+                  </div>
                 </div>
+                {formData.phone && !validatePhoneNumber(formData.phone, selectedCountry) && (
+                  <p className="text-xs text-red-600">
+                    Требуется {selectedCountry.phoneLength.join(' или ')} цифр для {selectedCountry.name}
+                  </p>
+                )}
               </div>
             )}
 

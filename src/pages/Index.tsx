@@ -7,9 +7,10 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import Icon from '@/components/ui/icon';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/lib/supabase';
 
 const Index = () => {
-  const { userProfile, signOut } = useAuth();
+  const { userProfile, signOut, user } = useAuth();
   const [activeSection, setActiveSection] = useState('chats');
   const [selectedChat, setSelectedChat] = useState(null);
   const [message, setMessage] = useState('');
@@ -259,27 +260,179 @@ const Index = () => {
     </div>
   );
 
+  const [searchUser, setSearchUser] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+
+  const handleUserSearch = async () => {
+    if (!searchUser.trim()) return;
+    
+    setSearchLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('user_profiles')
+        .select('id, username, phone, avatar_url')
+        .ilike('username', `%${searchUser}%`)
+        .neq('id', user?.id)
+        .limit(10);
+
+      if (error) {
+        console.error('Search error:', error);
+        return;
+      }
+
+      setSearchResults(data || []);
+    } catch (error) {
+      console.error('Search error:', error);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  const startChat = async (otherUserId: string) => {
+    try {
+      const { data: existingChat, error: chatError } = await supabase
+        .from('chat_participants')
+        .select(`
+          chat_id,
+          chats!inner(id, is_group)
+        `)
+        .eq('user_id', user?.id)
+        .eq('chats.is_group', false);
+
+      if (chatError) {
+        console.error('Chat check error:', chatError);
+        return;
+      }
+
+      let chatId = null;
+
+      // Проверяем есть ли уже чат между пользователями
+      if (existingChat && existingChat.length > 0) {
+        for (const chat of existingChat) {
+          const { data: participants } = await supabase
+            .from('chat_participants')
+            .select('user_id')
+            .eq('chat_id', chat.chat_id);
+
+          if (participants && participants.length === 2 && 
+              participants.some(p => p.user_id === otherUserId)) {
+            chatId = chat.chat_id;
+            break;
+          }
+        }
+      }
+
+      // Если чата нет, создаем новый
+      if (!chatId) {
+        const { data: newChat, error: createError } = await supabase
+          .from('chats')
+          .insert({
+            is_group: false,
+            created_by: user?.id
+          })
+          .select('id')
+          .single();
+
+        if (createError) {
+          console.error('Chat creation error:', createError);
+          return;
+        }
+
+        chatId = newChat.id;
+
+        // Добавляем участников
+        await supabase
+          .from('chat_participants')
+          .insert([
+            { chat_id: chatId, user_id: user?.id, role: 'admin' },
+            { chat_id: chatId, user_id: otherUserId, role: 'member' }
+          ]);
+      }
+
+      setSelectedChat(chatId);
+      setShowSearch(false);
+      setSearchUser('');
+      setSearchResults([]);
+    } catch (error) {
+      console.error('Start chat error:', error);
+    }
+  };
+
   const renderWelcome = () => (
     <div className="flex-1 flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50">
-      <div className="text-center animate-bounce-in">
+      <div className="text-center animate-bounce-in max-w-lg">
         <div className="w-32 h-32 bg-gradient-to-r from-primary to-secondary rounded-full flex items-center justify-center text-6xl text-white mb-6 mx-auto shadow-2xl">
           💬
         </div>
         <h2 className="text-3xl font-bold mb-4 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-          Добро пожаловать в Messenger!
+          {userProfile ? `Привет, @${userProfile.username}!` : 'Добро пожаловать в Messenger!'}
         </h2>
-        <p className="text-slate-600 mb-6 max-w-md">
-          Выберите чат слева, чтобы начать общение. Видеозвонки, стикеры, шифрование и многое другое ждут вас!
+        <p className="text-slate-600 mb-6">
+          Найдите друзей по имени пользователя, чтобы начать общение!
         </p>
-        <div className="flex gap-4 justify-center">
-          <Button className="bg-gradient-to-r from-primary to-secondary hover:scale-105 transition-transform">
-            <Icon name="MessageCircle" size={20} className="mr-2" />
-            Начать чат
-          </Button>
-          <Button variant="outline" className="hover:bg-accent/10">
-            <Icon name="Users" size={20} className="mr-2" />
-            Найти друзей
-          </Button>
+
+        {/* Поиск пользователей */}
+        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+          <h3 className="text-lg font-semibold mb-4 text-slate-800">Найти друзей</h3>
+          <div className="flex gap-2 mb-4">
+            <div className="relative flex-1">
+              <Icon name="Search" size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
+              <Input
+                placeholder="Введите имя пользователя..."
+                value={searchUser}
+                onChange={(e) => setSearchUser(e.target.value)}
+                className="pl-10"
+                onKeyDown={(e) => e.key === 'Enter' && handleUserSearch()}
+              />
+            </div>
+            <Button 
+              onClick={handleUserSearch}
+              disabled={searchLoading || !searchUser.trim()}
+              className="bg-gradient-to-r from-primary to-secondary"
+            >
+              {searchLoading ? (
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <Icon name="Search" size={18} />
+              )}
+            </Button>
+          </div>
+
+          {/* Результаты поиска */}
+          {searchResults.length > 0 && (
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              <h4 className="text-sm font-medium text-slate-600 mb-2">Найденные пользователи:</h4>
+              {searchResults.map((user: any) => (
+                <div key={user.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-gradient-to-r from-primary/20 to-secondary/20 rounded-full flex items-center justify-center">
+                      👤
+                    </div>
+                    <div className="text-left">
+                      <p className="font-medium text-slate-800">@{user.username}</p>
+                      <p className="text-xs text-slate-500">{user.phone}</p>
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => startChat(user.id)}
+                    className="bg-gradient-to-r from-primary to-secondary hover:scale-105 transition-transform"
+                  >
+                    <Icon name="MessageCircle" size={16} className="mr-1" />
+                    Чат
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {searchUser && searchResults.length === 0 && !searchLoading && (
+            <p className="text-sm text-slate-500 text-center py-4">
+              Пользователи не найдены. Проверьте имя пользователя.
+            </p>
+          )}
         </div>
       </div>
     </div>

@@ -101,14 +101,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         email,
         password,
         options: {
-          data: {
-            username,
-            phone
-          }
+          emailRedirectTo: undefined
         }
       });
 
       if (authError) {
+        console.error('Auth error:', authError);
         return { error: authError.message };
       }
 
@@ -123,7 +121,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
 
         if (profileError) {
+          console.error('Profile error:', profileError);
           return { error: 'Ошибка создания профиля' };
+        }
+
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password
+        });
+
+        if (signInError) {
+          console.error('Auto sign-in error:', signInError);
         }
       }
 
