@@ -147,6 +147,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setLoading(true);
       
+      // Проверяем существует ли пользователь с таким username
+      const { data: existingUser, error: userError } = await supabase
+        .from('user_profiles')
+        .select('id, username')
+        .eq('username', username)
+        .single();
+
+      if (userError || !existingUser) {
+        return { error: 'Пользователь с таким именем не найден' };
+      }
+
       const email = `${username}@messenger.app`;
       
       const { error } = await supabase.auth.signInWithPassword({
@@ -155,7 +166,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (error) {
-        return { error: 'Неверное имя пользователя или пароль' };
+        if (error.message.includes('Invalid login credentials')) {
+          return { error: 'Неверный пароль' };
+        }
+        return { error: 'Ошибка входа в систему' };
       }
 
       return { error: null };

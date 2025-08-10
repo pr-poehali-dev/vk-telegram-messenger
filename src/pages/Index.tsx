@@ -1,269 +1,133 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import Icon from '@/components/ui/icon';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
+import Settings from './Settings';
 
 const Index = () => {
   const { userProfile, signOut, user } = useAuth();
   const [activeSection, setActiveSection] = useState('chats');
-  const [selectedChat, setSelectedChat] = useState(null);
+  const [selectedChat, setSelectedChat] = useState<string | null>(null);
   const [message, setMessage] = useState('');
+  const [searchUser, setSearchUser] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [userChats, setUserChats] = useState<any[]>([]);
+  const [chatMessages, setChatMessages] = useState<any[]>([]);
+  const [showSettings, setShowSettings] = useState(false);
 
   const menuItems = [
     { id: 'chats', label: 'Чаты', icon: 'MessageCircle' },
     { id: 'contacts', label: 'Контакты', icon: 'Users' },
-    { id: 'groups', label: 'Группы', icon: 'Users2' },
-    { id: 'channels', label: 'Каналы', icon: 'Radio' },
     { id: 'calls', label: 'Звонки', icon: 'Phone' },
-    { id: 'stories', label: 'История', icon: 'Play' },
     { id: 'profile', label: 'Профиль', icon: 'User' },
     { id: 'settings', label: 'Настройки', icon: 'Settings' }
   ];
 
-  const chats = [
-    { id: 1, name: 'Александра Петрова', message: 'Привет! Как дела? 😊', time: '14:32', unread: 2, online: true, avatar: '👩‍💼' },
-    { id: 2, name: 'Team Developers', message: 'Михаил: Готов новый билд!', time: '13:45', unread: 5, isGroup: true, avatar: '💻' },
-    { id: 3, name: 'Мама', message: 'Звонок пропущен', time: '12:15', unread: 1, missed: true, avatar: '👩‍👧' },
-    { id: 4, name: 'Игорь Смирнов', message: 'Отправил фото', time: '11:23', unread: 0, online: false, avatar: '👨‍🔧' },
-    { id: 5, name: 'Канал Новости', message: '🔥 Главные события дня', time: '10:45', unread: 12, isChannel: true, avatar: '📺' }
-  ];
+  // Загружаем чаты пользователя
+  useEffect(() => {
+    if (user) {
+      loadUserChats();
+    }
+  }, [user]);
 
-  const stories = [
-    { id: 1, name: 'Моя история', avatar: '👤', hasStory: true, isOwn: true },
-    { id: 2, name: 'Александра', avatar: '👩‍💼', hasStory: true },
-    { id: 3, name: 'Team', avatar: '💻', hasStory: true },
-    { id: 4, name: 'Игорь', avatar: '👨‍🔧', hasStory: true },
-    { id: 5, name: 'Новости', avatar: '📺', hasStory: true }
-  ];
+  // Загружаем сообщения выбранного чата
+  useEffect(() => {
+    if (selectedChat) {
+      loadChatMessages(selectedChat);
+    }
+  }, [selectedChat]);
 
-  const messages = [
-    { id: 1, text: 'Привет! Как проходит работа над проектом?', time: '14:30', isOwn: false },
-    { id: 2, text: 'Отлично! Уже готов MVP версии 🚀', time: '14:31', isOwn: true },
-    { id: 3, text: 'Здорово! Можешь показать что получилось?', time: '14:32', isOwn: false },
-    { id: 4, text: 'Конечно! Вот ссылка на демо', time: '14:32', isOwn: true },
-    { id: 5, text: '👍 Круто выглядит!', time: '14:33', isOwn: false }
-  ];
+  const loadUserChats = async () => {
+    try {
+      const { data: chats, error } = await supabase
+        .from('chat_participants')
+        .select(`
+          chat_id,
+          chats (
+            id,
+            name,
+            is_group,
+            updated_at
+          )
+        `)
+        .eq('user_id', user?.id);
 
-  const renderSidebar = () => (
-    <div className="w-80 bg-gradient-to-b from-slate-50 to-slate-100 border-r border-slate-200 flex flex-col">
-      {/* Header */}
-      <div className="p-4 border-b border-slate-200">
-        <div className="flex items-center justify-between mb-4">
-          <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-            Messenger
-          </h1>
-          <div className="flex gap-2">
-            <Button variant="ghost" size="sm" className="hover:bg-primary/10">
-              <Icon name="Search" size={20} />
-            </Button>
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              className="hover:bg-red-100 hover:text-red-600" 
-              onClick={signOut}
-            >
-              <Icon name="LogOut" size={20} />
-            </Button>
-          </div>
-        </div>
-        
-        {userProfile && (
-          <div className="flex items-center gap-3 mb-4 p-2 bg-white/50 rounded-lg">
-            <div className="w-10 h-10 bg-gradient-to-r from-primary/20 to-secondary/20 rounded-full flex items-center justify-center">
-              👤
-            </div>
-            <div className="flex-1">
-              <h3 className="font-semibold text-sm">@{userProfile.username}</h3>
-              <p className="text-xs text-slate-500">{userProfile.phone}</p>
-            </div>
-            <Badge variant="secondary" className="text-xs">
-              {userProfile.theme === 'dark' ? '🌙' : '☀️'}
-            </Badge>
-          </div>
-        )}
-        
-        {/* Stories */}
-        <div className="flex gap-3 overflow-x-auto pb-2">
-          {stories.map(story => (
-            <div key={story.id} className="flex-shrink-0 text-center cursor-pointer group">
-              <div className={`w-14 h-14 rounded-full p-0.5 ${story.hasStory ? 'bg-gradient-to-r from-primary to-secondary' : 'bg-slate-300'} group-hover:scale-105 transition-transform`}>
-                <div className="w-full h-full bg-white rounded-full flex items-center justify-center text-xl">
-                  {story.avatar}
-                </div>
-              </div>
-              <p className="text-xs mt-1 text-slate-600 truncate w-14">{story.name}</p>
-            </div>
-          ))}
-        </div>
-      </div>
+      if (error) {
+        console.error('Error loading chats:', error);
+        return;
+      }
 
-      {/* Navigation */}
-      <div className="p-2">
-        <div className="grid grid-cols-4 gap-1">
-          {menuItems.map(item => (
-            <Button
-              key={item.id}
-              variant={activeSection === item.id ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setActiveSection(item.id)}
-              className={`flex flex-col h-16 ${activeSection === item.id ? 'bg-gradient-to-r from-primary to-secondary text-white shadow-lg' : 'hover:bg-slate-200'} transition-all duration-200`}
-            >
-              <Icon name={item.icon} size={20} />
-              <span className="text-xs mt-1">{item.label}</span>
-            </Button>
-          ))}
-        </div>
-      </div>
+      // Получаем информацию о собеседниках для личных чатов
+      const enrichedChats = await Promise.all(
+        (chats || []).map(async (chatData: any) => {
+          const chat = chatData.chats;
+          
+          if (!chat.is_group) {
+            // Для личных чатов находим собеседника
+            const { data: participants } = await supabase
+              .from('chat_participants')
+              .select('user_id, user_profiles(username, avatar_url)')
+              .eq('chat_id', chat.id)
+              .neq('user_id', user?.id);
 
-      {/* Chat List */}
-      <ScrollArea className="flex-1 px-2">
-        <div className="space-y-1">
-          {chats.map(chat => (
-            <Card
-              key={chat.id}
-              className={`cursor-pointer transition-all duration-200 hover:shadow-md ${selectedChat === chat.id ? 'ring-2 ring-primary shadow-lg' : ''}`}
-              onClick={() => setSelectedChat(chat.id)}
-            >
-              <CardContent className="p-3">
-                <div className="flex items-center gap-3">
-                  <div className="relative">
-                    <div className="w-12 h-12 bg-gradient-to-r from-primary/20 to-secondary/20 rounded-full flex items-center justify-center text-lg">
-                      {chat.avatar}
-                    </div>
-                    {chat.online && (
-                      <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white"></div>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-semibold text-sm truncate">{chat.name}</h3>
-                      <span className="text-xs text-slate-500">{chat.time}</span>
-                    </div>
-                    <div className="flex items-center justify-between mt-1">
-                      <p className={`text-sm truncate ${chat.missed ? 'text-red-500' : 'text-slate-600'}`}>
-                        {chat.message}
-                      </p>
-                      {chat.unread > 0 && (
-                        <Badge className="bg-gradient-to-r from-primary to-secondary text-white text-xs">
-                          {chat.unread}
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </ScrollArea>
-    </div>
-  );
+            if (participants && participants.length > 0) {
+              const otherUser = participants[0].user_profiles;
+              return {
+                id: chat.id,
+                name: otherUser?.username || 'Неизвестный',
+                avatar: '👤',
+                isGroup: false,
+                updated_at: chat.updated_at
+              };
+            }
+          }
 
-  const renderChat = () => (
-    <div className="flex-1 flex flex-col bg-gradient-to-br from-slate-50 to-blue-50">
-      {/* Chat Header */}
-      <div className="p-4 border-b border-slate-200 bg-white/80 backdrop-blur-sm">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-r from-primary/20 to-secondary/20 rounded-full flex items-center justify-center">
-              👩‍💼
-            </div>
-            <div>
-              <h2 className="font-semibold">Александра Петрова</h2>
-              <p className="text-sm text-green-600">онлайн</p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="ghost" size="sm" className="hover:bg-primary/10">
-              <Icon name="Phone" size={20} />
-            </Button>
-            <Button variant="ghost" size="sm" className="hover:bg-primary/10">
-              <Icon name="Video" size={20} />
-            </Button>
-            <Button variant="ghost" size="sm" className="hover:bg-primary/10">
-              <Icon name="MoreVertical" size={20} />
-            </Button>
-          </div>
-        </div>
-      </div>
+          return {
+            id: chat.id,
+            name: chat.name || 'Группа',
+            avatar: '👥',
+            isGroup: true,
+            updated_at: chat.updated_at
+          };
+        })
+      );
 
-      {/* Messages */}
-      <ScrollArea className="flex-1 p-4">
-        <div className="space-y-4">
-          {messages.map(msg => (
-            <div key={msg.id} className={`flex ${msg.isOwn ? 'justify-end' : 'justify-start'} animate-fade-in`}>
-              <div className={`max-w-xs lg:max-w-md px-4 py-3 rounded-2xl ${
-                msg.isOwn 
-                  ? 'bg-gradient-to-r from-primary to-secondary text-white ml-auto' 
-                  : 'bg-white shadow-sm border border-slate-200'
-              }`}>
-                <p className="text-sm">{msg.text}</p>
-                <p className={`text-xs mt-1 ${msg.isOwn ? 'text-white/70' : 'text-slate-500'}`}>
-                  {msg.time}
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </ScrollArea>
+      setUserChats(enrichedChats);
+    } catch (error) {
+      console.error('Error loading chats:', error);
+    }
+  };
 
-      {/* Message Input */}
-      <div className="p-4 border-t border-slate-200 bg-white/80 backdrop-blur-sm">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" className="hover:bg-accent/10">
-            <Icon name="Paperclip" size={20} />
-          </Button>
-          <Button variant="ghost" size="sm" className="hover:bg-accent/10">
-            <Icon name="Smile" size={20} />
-          </Button>
-          <div className="flex-1 relative">
-            <Input
-              placeholder="Написать сообщение..."
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              className="pr-12 bg-slate-100 border-0 focus:bg-white transition-colors"
-            />
-            <Button 
-              size="sm" 
-              className="absolute right-1 top-1 h-8 w-8 p-0 bg-gradient-to-r from-primary to-secondary hover:scale-105 transition-transform"
-            >
-              <Icon name="Send" size={16} />
-            </Button>
-          </div>
-          <Button variant="ghost" size="sm" className="hover:bg-accent/10">
-            <Icon name="Mic" size={20} />
-          </Button>
-        </div>
-        
-        {/* Quick Actions */}
-        <div className="flex gap-2 mt-3">
-          <Button variant="outline" size="sm" className="text-xs hover:bg-primary/10">
-            📸 Камера
-          </Button>
-          <Button variant="outline" size="sm" className="text-xs hover:bg-secondary/10">
-            🎨 Стикеры
-          </Button>
-          <Button variant="outline" size="sm" className="text-xs hover:bg-accent/10">
-            📁 Файлы
-          </Button>
-          <Button variant="outline" size="sm" className="text-xs hover:bg-primary/10">
-            🔒 Шифровать
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
+  const loadChatMessages = async (chatId: string) => {
+    try {
+      const { data: messages, error } = await supabase
+        .from('messages')
+        .select(`
+          id,
+          content,
+          sender_id,
+          created_at,
+          user_profiles(username)
+        `)
+        .eq('chat_id', chatId)
+        .order('created_at', { ascending: true });
 
-  const [searchUser, setSearchUser] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [showSearch, setShowSearch] = useState(false);
+      if (error) {
+        console.error('Error loading messages:', error);
+        return;
+      }
+
+      setChatMessages(messages || []);
+    } catch (error) {
+      console.error('Error loading messages:', error);
+    }
+  };
 
   const handleUserSearch = async () => {
     if (!searchUser.trim()) return;
@@ -292,7 +156,8 @@ const Index = () => {
 
   const startChat = async (otherUserId: string) => {
     try {
-      const { data: existingChat, error: chatError } = await supabase
+      // Проверяем есть ли уже чат между пользователями
+      const { data: existingChats, error: chatError } = await supabase
         .from('chat_participants')
         .select(`
           chat_id,
@@ -308,9 +173,9 @@ const Index = () => {
 
       let chatId = null;
 
-      // Проверяем есть ли уже чат между пользователями
-      if (existingChat && existingChat.length > 0) {
-        for (const chat of existingChat) {
+      // Проверяем каждый чат на наличие второго участника
+      if (existingChats && existingChats.length > 0) {
+        for (const chat of existingChats) {
           const { data: participants } = await supabase
             .from('chat_participants')
             .select('user_id')
@@ -352,35 +217,249 @@ const Index = () => {
       }
 
       setSelectedChat(chatId);
-      setShowSearch(false);
       setSearchUser('');
       setSearchResults([]);
+      await loadUserChats(); // Обновляем список чатов
     } catch (error) {
       console.error('Start chat error:', error);
     }
   };
 
+  const sendMessage = async () => {
+    if (!message.trim() || !selectedChat) return;
+
+    try {
+      const { error } = await supabase
+        .from('messages')
+        .insert({
+          chat_id: selectedChat,
+          sender_id: user?.id,
+          content: message.trim(),
+          message_type: 'text'
+        });
+
+      if (error) {
+        console.error('Send message error:', error);
+        return;
+      }
+
+      setMessage('');
+      await loadChatMessages(selectedChat);
+    } catch (error) {
+      console.error('Send message error:', error);
+    }
+  };
+
+  const renderSidebar = () => (
+    <div className="w-80 bg-white border-r border-gray-100 flex flex-col">
+      {/* Header */}
+      <div className="p-4 border-b border-gray-100">
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-xl font-bold text-gray-900">
+            Messages
+          </h1>
+          <div className="flex gap-2">
+            <Button variant="ghost" size="sm">
+              <Icon name="Search" size={18} />
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={signOut}
+              className="text-red-600 hover:text-red-700"
+            >
+              <Icon name="LogOut" size={18} />
+            </Button>
+          </div>
+        </div>
+        
+        {userProfile && (
+          <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+            <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-medium">
+              {userProfile.username[0].toUpperCase()}
+            </div>
+            <div className="flex-1">
+              <h3 className="font-medium text-gray-900">@{userProfile.username}</h3>
+              <p className="text-sm text-gray-500">Онлайн</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Navigation */}
+      <div className="p-2 border-b border-gray-100">
+        <div className="grid grid-cols-3 gap-1">
+          {menuItems.slice(0, 3).map(item => (
+            <Button
+              key={item.id}
+              variant={activeSection === item.id ? "default" : "ghost"}
+              size="sm"
+              onClick={() => {
+                setActiveSection(item.id);
+                if (item.id === 'settings') {
+                  setShowSettings(true);
+                }
+              }}
+              className="flex flex-col h-12 text-xs"
+            >
+              <Icon name={item.icon} size={16} />
+              <span className="mt-1">{item.label}</span>
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {/* Chat List */}
+      <ScrollArea className="flex-1">
+        <div className="p-2">
+          {userChats.length === 0 ? (
+            <div className="text-center py-8">
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Icon name="MessageCircle" size={24} className="text-gray-400" />
+              </div>
+              <p className="text-gray-500 text-sm">Пока нет чатов</p>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {userChats.map(chat => (
+                <Card
+                  key={chat.id}
+                  className={`cursor-pointer transition-colors hover:bg-gray-50 ${selectedChat === chat.id ? 'bg-blue-50 border-blue-200' : 'border-gray-100'}`}
+                  onClick={() => setSelectedChat(chat.id)}
+                >
+                  <CardContent className="p-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center">
+                        {chat.avatar}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-medium text-gray-900 truncate">
+                          {chat.name}
+                        </h3>
+                        <p className="text-sm text-gray-500 truncate">
+                          {chat.isGroup ? 'Группа' : 'Личный чат'}
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      </ScrollArea>
+    </div>
+  );
+
+  const renderChat = () => (
+    <div className="flex-1 flex flex-col bg-gray-50">
+      {/* Chat Header */}
+      <div className="p-4 bg-white border-b border-gray-100">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
+              👤
+            </div>
+            <div>
+              <h2 className="font-medium text-gray-900">
+                {userChats.find(c => c.id === selectedChat)?.name || 'Чат'}
+              </h2>
+              <p className="text-sm text-green-600">онлайн</p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="ghost" size="sm">
+              <Icon name="Phone" size={18} />
+            </Button>
+            <Button variant="ghost" size="sm">
+              <Icon name="Video" size={18} />
+            </Button>
+            <Button variant="ghost" size="sm">
+              <Icon name="MoreVertical" size={18} />
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Messages */}
+      <ScrollArea className="flex-1 p-4">
+        <div className="space-y-4">
+          {chatMessages.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-gray-500">Пока нет сообщений</p>
+              <p className="text-sm text-gray-400 mt-1">Начните беседу!</p>
+            </div>
+          ) : (
+            chatMessages.map(msg => (
+              <div key={msg.id} className={`flex ${msg.sender_id === user?.id ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                  msg.sender_id === user?.id 
+                    ? 'bg-blue-500 text-white' 
+                    : 'bg-white border border-gray-200'
+                }`}>
+                  <p className="text-sm">{msg.content}</p>
+                  <p className={`text-xs mt-1 ${msg.sender_id === user?.id ? 'text-blue-100' : 'text-gray-500'}`}>
+                    {new Date(msg.created_at).toLocaleTimeString('ru-RU', { 
+                      hour: '2-digit', 
+                      minute: '2-digit' 
+                    })}
+                  </p>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </ScrollArea>
+
+      {/* Message Input */}
+      <div className="p-4 bg-white border-t border-gray-100">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="sm">
+            <Icon name="Paperclip" size={18} />
+          </Button>
+          <div className="flex-1 relative">
+            <Input
+              placeholder="Напишите сообщение..."
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
+              className="pr-12"
+            />
+            <Button 
+              size="sm" 
+              onClick={sendMessage}
+              disabled={!message.trim()}
+              className="absolute right-1 top-1 h-8 w-8 p-0"
+            >
+              <Icon name="Send" size={16} />
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   const renderWelcome = () => (
-    <div className="flex-1 flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50">
-      <div className="text-center animate-bounce-in max-w-lg">
-        <div className="w-32 h-32 bg-gradient-to-r from-primary to-secondary rounded-full flex items-center justify-center text-6xl text-white mb-6 mx-auto shadow-2xl">
+    <div className="flex-1 flex items-center justify-center bg-gray-50">
+      <div className="text-center max-w-md">
+        <div className="w-24 h-24 bg-blue-500 rounded-full flex items-center justify-center text-4xl text-white mb-6 mx-auto">
           💬
         </div>
-        <h2 className="text-3xl font-bold mb-4 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-          {userProfile ? `Привет, @${userProfile.username}!` : 'Добро пожаловать в Messenger!'}
+        <h2 className="text-2xl font-bold mb-4 text-gray-900">
+          {userProfile ? `Привет, @${userProfile.username}!` : 'Добро пожаловать!'}
         </h2>
-        <p className="text-slate-600 mb-6">
-          Найдите друзей по имени пользователя, чтобы начать общение!
+        <p className="text-gray-600 mb-6">
+          Найдите друзей по имени пользователя, чтобы начать общение
         </p>
 
-        {/* Поиск пользователей */}
-        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-          <h3 className="text-lg font-semibold mb-4 text-slate-800">Найти друзей</h3>
+        {/* Search */}
+        <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
+          <h3 className="text-lg font-medium mb-4 text-gray-900">Найти пользователей</h3>
           <div className="flex gap-2 mb-4">
             <div className="relative flex-1">
-              <Icon name="Search" size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
+              <Icon name="Search" size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
               <Input
-                placeholder="Введите имя пользователя..."
+                placeholder="Введите username..."
                 value={searchUser}
                 onChange={(e) => setSearchUser(e.target.value)}
                 className="pl-10"
@@ -390,35 +469,33 @@ const Index = () => {
             <Button 
               onClick={handleUserSearch}
               disabled={searchLoading || !searchUser.trim()}
-              className="bg-gradient-to-r from-primary to-secondary"
             >
               {searchLoading ? (
                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               ) : (
-                <Icon name="Search" size={18} />
+                <Icon name="Search" size={16} />
               )}
             </Button>
           </div>
 
-          {/* Результаты поиска */}
+          {/* Search Results */}
           {searchResults.length > 0 && (
-            <div className="space-y-2 max-h-60 overflow-y-auto">
-              <h4 className="text-sm font-medium text-slate-600 mb-2">Найденные пользователи:</h4>
-              {searchResults.map((user: any) => (
-                <div key={user.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors">
+            <div className="space-y-2">
+              <h4 className="text-sm font-medium text-gray-700 mb-2">Найденные пользователи:</h4>
+              {searchResults.map((foundUser: any) => (
+                <div key={foundUser.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-gradient-to-r from-primary/20 to-secondary/20 rounded-full flex items-center justify-center">
-                      👤
+                    <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-medium">
+                      {foundUser.username[0].toUpperCase()}
                     </div>
                     <div className="text-left">
-                      <p className="font-medium text-slate-800">@{user.username}</p>
-                      <p className="text-xs text-slate-500">{user.phone}</p>
+                      <p className="font-medium text-gray-900">@{foundUser.username}</p>
+                      <p className="text-xs text-gray-500">{foundUser.phone}</p>
                     </div>
                   </div>
                   <Button
                     size="sm"
-                    onClick={() => startChat(user.id)}
-                    className="bg-gradient-to-r from-primary to-secondary hover:scale-105 transition-transform"
+                    onClick={() => startChat(foundUser.id)}
                   >
                     <Icon name="MessageCircle" size={16} className="mr-1" />
                     Чат
@@ -429,8 +506,8 @@ const Index = () => {
           )}
 
           {searchUser && searchResults.length === 0 && !searchLoading && (
-            <p className="text-sm text-slate-500 text-center py-4">
-              Пользователи не найдены. Проверьте имя пользователя.
+            <p className="text-sm text-gray-500 text-center py-4">
+              Пользователи не найдены
             </p>
           )}
         </div>
@@ -438,8 +515,12 @@ const Index = () => {
     </div>
   );
 
+  if (showSettings) {
+    return <Settings onBack={() => setShowSettings(false)} />;
+  }
+
   return (
-    <div className="min-h-screen flex bg-slate-100">
+    <div className="min-h-screen flex bg-white">
       {renderSidebar()}
       {selectedChat ? renderChat() : renderWelcome()}
     </div>

@@ -1,6 +1,7 @@
 import React from 'react';
-import Select, { SingleValue, StylesConfig } from 'react-select';
+import { Button } from '@/components/ui/button';
 import { Country } from '@/data/countries';
+import Icon from '@/components/ui/icon';
 
 interface CountrySelectProps {
   value: Country;
@@ -8,71 +9,50 @@ interface CountrySelectProps {
   countries: Country[];
 }
 
-interface OptionType {
-  value: string;
-  label: string;
-  country: Country;
-}
-
 const CountrySelect: React.FC<CountrySelectProps> = ({ value, onChange, countries }) => {
-  const options: OptionType[] = countries.map(country => ({
-    value: country.code,
-    label: `${country.flag} ${country.dialCode}`,
-    country
-  }));
-
-  const customStyles: StylesConfig<OptionType, false> = {
-    control: (provided, state) => ({
-      ...provided,
-      minWidth: '120px',
-      borderColor: state.isFocused ? 'rgb(99 102 241)' : 'rgb(226 232 240)',
-      boxShadow: state.isFocused ? '0 0 0 1px rgb(99 102 241)' : 'none',
-      '&:hover': {
-        borderColor: 'rgb(99 102 241)'
-      }
-    }),
-    option: (provided, state) => ({
-      ...provided,
-      backgroundColor: state.isSelected 
-        ? 'rgb(99 102 241)' 
-        : state.isFocused 
-        ? 'rgb(241 245 249)' 
-        : 'white',
-      color: state.isSelected ? 'white' : 'rgb(15 23 42)',
-      '&:hover': {
-        backgroundColor: state.isSelected ? 'rgb(99 102 241)' : 'rgb(241 245 249)'
-      }
-    }),
-    singleValue: (provided) => ({
-      ...provided,
-      color: 'rgb(15 23 42)'
-    })
-  };
-
-  const handleChange = (newValue: SingleValue<OptionType>) => {
-    if (newValue) {
-      onChange(newValue.country);
-    }
-  };
-
-  const selectedOption = options.find(option => option.value === value.code);
+  const [isOpen, setIsOpen] = React.useState(false);
 
   return (
-    <Select
-      value={selectedOption}
-      onChange={handleChange}
-      options={options}
-      styles={customStyles}
-      isSearchable
-      placeholder="Выберите страну"
-      formatOptionLabel={(option) => (
+    <div className="relative">
+      <Button
+        type="button"
+        variant="outline"
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center gap-2 min-w-[120px] justify-between"
+      >
         <div className="flex items-center gap-2">
-          <span className="text-lg">{option.country.flag}</span>
-          <span className="font-medium">{option.country.dialCode}</span>
-          <span className="text-sm text-slate-600">{option.country.name}</span>
+          <span className="text-lg">{value.flag}</span>
+          <span className="font-medium">{value.dialCode}</span>
         </div>
+        <Icon name={isOpen ? "ChevronUp" : "ChevronDown"} size={16} />
+      </Button>
+
+      {isOpen && (
+        <>
+          <div 
+            className="fixed inset-0 z-10" 
+            onClick={() => setIsOpen(false)}
+          />
+          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-20 max-h-60 overflow-y-auto">
+            {countries.map((country) => (
+              <button
+                key={country.code}
+                type="button"
+                onClick={() => {
+                  onChange(country);
+                  setIsOpen(false);
+                }}
+                className="w-full flex items-center gap-3 px-3 py-2 hover:bg-slate-50 text-left"
+              >
+                <span className="text-lg">{country.flag}</span>
+                <span className="font-medium">{country.dialCode}</span>
+                <span className="text-sm text-slate-600 truncate">{country.name}</span>
+              </button>
+            ))}
+          </div>
+        </>
       )}
-    />
+    </div>
   );
 };
 
